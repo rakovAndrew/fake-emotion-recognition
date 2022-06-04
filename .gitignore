@@ -6,3 +6,5 @@
 /.idea/inspectionProfiles/Project_Default.xml
 /.idea/vcs.xml
 /.idea/.gitignore
+/dataset/check/
+/dataset/training/compressed_csv_with_frames/
