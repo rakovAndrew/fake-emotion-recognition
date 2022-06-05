@@ -128,6 +128,14 @@ def find_and_save_emotion_duration(file, new_file):
     csv_file.to_csv(new_file, index=False)
 
 
+def save_emotion_truthfulness(file, new_file, truthfulness):
+    csv_file = pd.read_csv(file)
+    new_column = csv_file['mean_duration'] + 1
+    csv_file['truthfulness'] = new_column
+    csv_file['truthfulness'] = int(truthfulness)
+    csv_file.to_csv(new_file, index=False)
+
+
 def compress_csv_data_and_save_csv_with_frames(
         pleasure_csv_directory,
         pleasure_compressed_csv_directory,
@@ -193,16 +201,18 @@ def compress_all_csv_data_and_save_csv_with_frames():
     compress_training_fake_pleasure_csv_data_and_save_csv_with_frames()
 
 
-def join_csv_files_in_directory(files_directory):
+def join_csv_files_in_directory(files_directory, file_name):
     joined_files = os.path.join('%s' % files_directory, '*.csv')
     joined_list = glob.glob(joined_files)
     fat_file = pd.concat(map(pd.read_csv, joined_list), ignore_index=True)
+    fat_file.to_csv(file_name, index=False)
     return fat_file
 
 
-def join_csv_files(*files):
+def join_csv_files(file_name, *files):
     joined_list = []
     for file in files:
         joined_list.append(file)
     fat_file = pd.concat(map(pd.read_csv, joined_list), ignore_index=True)
+    fat_file.to_csv(file_name, index=False)
     return fat_file
