@@ -8,3 +8,4 @@
 /.idea/.gitignore
 /dataset/check/
 /dataset/training/compressed_csv_with_frames/
+/dataset/validation/compressed_csv_with_frames/

@@ -39,7 +39,7 @@ def save_video_frames_and_aus_activity(video):
     csv = video.replace('video', 'csv').replace('.mp4', '.csv')
     file = pd.read_csv(csv)
     aus = file["AU06"], file["AU07"], file["AU12"], file["AU25"], file["AU26"]
-    aus_info = open(os.path.join(config['Paths']['temp directory'], 'aus_info.txt'), 'w')
+    aus_info = open(os.path.join(config['Temp path']['temp directory'], 'aus_info.txt'), 'w')
     i = 0
 
     if not cap.isOpened():
@@ -53,7 +53,7 @@ def save_video_frames_and_aus_activity(video):
 
             cv2.putText(img=frame, text=str(i), org=(40, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=2,
                         color=(0, 255, 0), thickness=3)
-            cv2.imwrite(os.path.join(config['Paths']['temp directory'], 'frame' + str(i) + '.jpg'), frame)
+            cv2.imwrite(os.path.join(config['Temp path']['temp directory'], 'frame' + str(i) + '.jpg'), frame)
             cv2.imshow('frame', frame)
 
             aus_info.write(str(i)+'\n')
