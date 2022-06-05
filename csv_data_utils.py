@@ -1,4 +1,5 @@
 import configparser
+import glob
 import os
 import shutil
 
@@ -34,9 +35,9 @@ happiness_aus = {
 }
 
 
-def extract_and_save_csv_data_from_video(video, video_directory, csv_directory):
+def extract_and_save_csv_data_from_video(video, video_directory, csv_directory, skip_frames=1):
     new_file_name = video.replace('.mp4', '.csv')
-    video_prediction = detector.detect_video(os.path.join(video_directory, video),
+    video_prediction = detector.detect_video(os.path.join(video_directory, video), skip_frames=skip_frames,
                                              outputFname=new_file_name)
     shutil.move(new_file_name,
                 os.path.join(csv_directory, new_file_name))
@@ -83,6 +84,28 @@ def remove_specific_row(file, new_file, columns_with_values):
     for key, value in columns_with_values.items():
         csv_file = csv_file[eval("csv_file.{}".format(key)) >= value]
     csv_file.to_csv(new_file, index=False)
+
+
+def remove_duplicated_row(file, new_file, columns):
+    csv_file = pd.read_csv(file)
+    csv_file = csv_file.drop_duplicates(subset=columns, keep='first')
+    csv_file.to_csv(new_file, index=False)
+
+
+def remove_rows_with_duplicated_frames(file, new_file):
+    remove_duplicated_row(file, new_file, ['frame'])
+
+
+def remove_rows_with_duplicated_frames_from_all_videos():
+    paths = [config['Validation path']['true pleasure csv directory'],
+             config['Validation path']['fake pleasure csv directory'],
+             config['Training path']['true pleasure csv directory'],
+             config['Training path']['fake pleasure csv directory']]
+
+    for path in paths:
+        for file in os.listdir(path):
+            file_path = os.path.join(path, file)
+            remove_duplicated_row(file_path, file_path, ['frame'])
 
 
 def save_specific_column(file, new_file, columns):
@@ -161,3 +184,25 @@ def compress_training_fake_pleasure_csv_data_and_save_csv_with_frames():
         config['Training path']['fake pleasure compressed csv directory'],
         config['Training path']['fake pleasure compressed csv with frames directory']
     )
+
+
+def compress_all_csv_data_and_save_csv_with_frames():
+    compress_validation_true_pleasure_csv_data_and_save_csv_with_frames()
+    compress_validation_fake_pleasure_csv_data_and_save_csv_with_frames()
+    compress_training_true_pleasure_csv_data_and_save_csv_with_frames()
+    compress_training_fake_pleasure_csv_data_and_save_csv_with_frames()
+
+
+def join_csv_files_in_directory(files_directory):
+    joined_files = os.path.join('%s' % files_directory, '*.csv')
+    joined_list = glob.glob(joined_files)
+    fat_file = pd.concat(map(pd.read_csv, joined_list), ignore_index=True)
+    return fat_file
+
+
+def join_csv_files(*files):
+    joined_list = []
+    for file in files:
+        joined_list.append(file)
+    fat_file = pd.concat(map(pd.read_csv, joined_list), ignore_index=True)
+    return fat_file
