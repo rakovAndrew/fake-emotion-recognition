@@ -7,6 +7,8 @@ import pandas as pd
 from feat import Detector
 from feat.utils import read_feat
 
+from main import config
+
 face_model = "retinaface"
 landmark_model = "pfld"
 emotion_model = "fer"
@@ -216,3 +218,41 @@ def join_csv_files(file_name, *files):
     fat_file = pd.concat(map(pd.read_csv, joined_list), ignore_index=True)
     fat_file.to_csv(file_name, index=False)
     return fat_file
+
+
+def merge_all_csv_files_into_training_and_validation_files():
+    true_training_dataset_path = os.path.join(config['Training path']['training directory'],
+                                              'true_training_dataset_file.csv')
+    fake_training_dataset_path = os.path.join(config['Training path']['training directory'],
+                                              'fake_training_dataset_file.csv')
+    true_validation_dataset_path = os.path.join(config['Validation path']['validation directory'],
+                                                'true_validation_dataset_file.csv')
+    fake_validation_dataset_path = os.path.join(config['Validation path']['validation directory'],
+                                                'fake_validation_dataset_file.csv')
+    true_training_dataset_file = join_csv_files_in_directory(
+        config['Training path']['true pleasure compressed csv directory'],
+        true_training_dataset_path)
+    save_emotion_truthfulness(true_training_dataset_path, true_training_dataset_path, 1)
+    fake_training_dataset_file = join_csv_files_in_directory(
+        config['Training path']['fake pleasure compressed csv directory'],
+        fake_training_dataset_path)
+    save_emotion_truthfulness(fake_training_dataset_path, fake_training_dataset_path, 0)
+    true_validation_dataset_file = join_csv_files_in_directory(
+        config['Validation path']['true pleasure compressed csv directory'],
+        true_validation_dataset_path)
+    save_emotion_truthfulness(true_validation_dataset_path, true_validation_dataset_path, 1)
+    fake_validation_dataset_file = join_csv_files_in_directory(
+        config['Validation path']['fake pleasure compressed csv directory'],
+        fake_validation_dataset_path)
+    save_emotion_truthfulness(fake_validation_dataset_path, fake_validation_dataset_path, 0)
+    training_dataset_path = os.path.join(config['Training path']['training directory'], 'training_dataset_file.csv')
+    training_dataset_file = join_csv_files(
+        training_dataset_path,
+        true_training_dataset_path,
+        fake_training_dataset_path)
+    validation_dataset_path = os.path.join(config['Validation path']['validation directory'],
+                                           'validation_dataset_file.csv')
+    validation_dataset_file = join_csv_files(
+        validation_dataset_path,
+        true_validation_dataset_path,
+        fake_validation_dataset_path)
