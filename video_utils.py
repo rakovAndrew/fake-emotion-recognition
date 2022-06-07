@@ -1,4 +1,5 @@
 import configparser
+import datetime
 import os.path
 import time
 from os.path import join
@@ -56,9 +57,9 @@ def save_video_frames_and_aus_activity(video):
             cv2.imwrite(os.path.join(config['Temp path']['temp directory'], 'frame' + str(i) + '.jpg'), frame)
             cv2.imshow('frame', frame)
 
-            aus_info.write(str(i)+'\n')
+            aus_info.write(str(i) + '\n')
             while j < 5:
-                aus_info.write(str(aus[j][i])+'\n')
+                aus_info.write(str(aus[j][i]) + '\n')
                 j += 1
             print(i)
 
@@ -72,3 +73,25 @@ def save_video_frames_and_aus_activity(video):
     cap.release()
     cv2.destroyAllWindows()
     aus_info.close()
+
+
+def get_video_duration(file_path):
+    video = cv2.VideoCapture(file_path)
+    frame_count = video.get(cv2.CAP_PROP_FRAME_COUNT)
+    duration = frame_count / 30
+
+    return duration
+
+
+def get_total_video_duration_in_directory(directory_path):
+    total_duration = 0.0
+
+    for file in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, file)
+        total_duration += get_video_duration(file_path)
+
+    return total_duration
+
+
+def parse_duration_from_seconds_to_minutes(duration):
+    return str(datetime.timedelta(seconds=int(duration)))
