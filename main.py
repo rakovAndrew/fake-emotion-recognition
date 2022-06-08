@@ -36,51 +36,166 @@ validation_dataset_shuffled = validation_dataset.sample(frac=1)
 validation_dataset_data_shuffled = validation_dataset_shuffled.iloc[:, :21]
 validation_dataset_answers_shuffled = validation_dataset_shuffled.iloc[:, [21]]
 
-tensorflow.random.set_seed(13)
-tensorflow.debugging.set_log_device_placement(False)
-tensorflow.config.experimental.list_physical_devices('GPU')
+# tensorflow.random.set_seed(13)
+# tensorflow.debugging.set_log_device_placement(False)
+# tensorflow.config.experimental.list_physical_devices('GPU')
 
 training_stats = training_dataset_shuffled.describe()
 training_stats = training_stats.transpose()
-print(training_stats)
+# print(training_stats)
 
-model = Sequential()
-nodes = 42
-model.add(Dense(nodes, input_dim=21, activation='relu'))
 
-model.add(Dense(nodes * 4, Activation('relu')))
-model.add(Dropout(0.2))
-model.add(Dense(nodes * 2, Activation('relu')))
-model.add(Dropout(0.2))
-model.add(Dense(nodes, Activation('relu')))
-model.add(Dense(nodes/2, Activation('relu')))
-model.add(Dense(nodes/4, Activation('relu')))
-model.add(Dense(1, Activation('sigmoid')))
-
-learning_rate = 0.0005
-optimizer = optimizers.Adam(learning_rate)
-model.compile(loss=keras.losses.binary_crossentropy,
-              optimizer=optimizer,
-              metrics=['accuracy'])
-
-model.summary()
-
-EPOCHS = 200
+MAX_EPOCHS = 230
 batch_size = 13
+run = 0
+runs = 6
+learning_rate_border = 0.004
 
-with tensorflow.device('/CPU:0'):  # it can be with '/CPU:0'
-    # with tf.device('/GPU:0'): # comment the previous line and uncomment this line to train with a GPU, if available.
-    history = model.fit(
-        training_dataset_data_shuffled,
-        training_dataset_answers_shuffled,
-        batch_size=batch_size,
-        epochs=EPOCHS,
-        verbose=1,
-        shuffle=True,
-        steps_per_epoch=int(training_dataset_data_shuffled.shape[0] / batch_size),
-        validation_data=(validation_dataset_data_shuffled, validation_dataset_answers_shuffled),
-    )
+best_accuracy = {0.0015: 0, 0.00175: 0,
+                 0.002: 0, 0.00225: 0, 0.0025: 0, 0.00275: 0,
+                 0.003: 0, 0.00325: 0, 0.0035: 0, 0.00375: 0}
 
+best_validation_accuracy = {0.0015: 0, 0.00175: 0,
+                            0.002: 0, 0.00225: 0, 0.0025: 0, 0.00275: 0,
+                            0.003: 0, 0.00325: 0, 0.0035: 0, 0.00375: 0}
+
+
+def create_model(learning_rate):
+    global model
+    model = Sequential()
+    nodes = 42
+    model.add(Dense(nodes, input_dim=21, activation='relu'))
+    model.add(Dense(nodes * 4, Activation('relu')))
+    model.add(Dropout(0.2))
+    model.add(Dense(nodes * 2, Activation('relu')))
+    model.add(Dropout(0.2))
+    model.add(Dense(nodes, Activation('relu')))
+    model.add(Dense(nodes / 2, Activation('relu')))
+    model.add(Dense(nodes / 4, Activation('relu')))
+    model.add(Dense(1, Activation('sigmoid')))
+    optimizer = optimizers.Adam(learning_rate)
+    model.compile(loss=keras.losses.binary_crossentropy,
+                  optimizer=optimizer,
+                  metrics=['accuracy'])
+
+
+def test_model():
+    global history
+    with tensorflow.device('/CPU:0'):
+        history = model.fit(
+            training_dataset_data_shuffled,
+            training_dataset_answers_shuffled,
+            batch_size=batch_size,
+            epochs=epoch,
+            verbose=0,
+            shuffle=True,
+            steps_per_epoch=int(training_dataset_data_shuffled.shape[0] / batch_size),
+            validation_data=(validation_dataset_data_shuffled, validation_dataset_answers_shuffled),
+        )
+
+
+accuracy_by_epochs = {140: 0, 150: 0, 160: 0,
+                      170: 0, 180: 0, 190: 0, 200: 0, 210: 0, 220: 0}
+
+validation_accuracy_by_epochs = {140: 0, 150: 0, 160: 0,
+                                 170: 0, 180: 0, 190: 0, 200: 0, 210: 0, 220: 0}
+
+while run < runs:
+    epoch = list(accuracy_by_epochs.keys())[0]
+
+    while epoch < MAX_EPOCHS:
+        accuracy = {}
+        validation_accuracy = {}
+        learning_rate = list(best_accuracy.keys())[0]
+
+        while learning_rate < learning_rate_border:
+            print('===================================')
+            print('%s - %s - %.5f' % (run, epoch, learning_rate))
+            print('===================================')
+
+            create_model(learning_rate)
+            # model.summary()
+            test_model()
+
+            accuracy.update({round(learning_rate, 5): history.history['accuracy'][epoch - 1]})
+            validation_accuracy.update({round(learning_rate, 5): history.history['val_accuracy'][epoch - 1]})
+
+            max_accuracy = accuracy_by_epochs.get(epoch)
+            for key in accuracy.keys():
+                if max_accuracy < accuracy.get(key):
+                    max_accuracy = accuracy.get(key)
+
+            accuracy_by_epochs.update({epoch: max_accuracy})
+
+            max_validation_accuracy = validation_accuracy_by_epochs.get(epoch)
+            for key in validation_accuracy.keys():
+                if max_validation_accuracy < validation_accuracy.get(key):
+                    max_validation_accuracy = validation_accuracy.get(key)
+
+            validation_accuracy_by_epochs.update({epoch: max_validation_accuracy})
+
+            learning_rate += 0.00025
+
+        print('----------------')
+        print('current accuracy')
+        for key, value in accuracy.items():
+            print('%.5f -- %.4f' % (key, value))
+        print('----------------')
+
+        for key, value in accuracy.items():
+            if value > best_accuracy.get(key):
+                best_accuracy.update({key: value})
+
+        print('best accuracy')
+        for key, value in best_accuracy.items():
+            print('%.5f -- %.4f' % (key, value))
+        print('----------------')
+
+        for key, value in validation_accuracy.items():
+            if value > best_validation_accuracy.get(key):
+                best_validation_accuracy.update({key: value})
+
+        print('best validation accuracy')
+        for key, value in best_validation_accuracy.items():
+            print('%.5f -- %.4f' % (key, value))
+        print('----------------')
+
+        epoch += 10
+
+    run += 1
+
+print('----------------')
+print('accuracy by epochs')
+for key, value in accuracy_by_epochs.items():
+    print('%s -- %.4f' % (key, value))
+
+print('----------------')
+print('validation accuracy by epochs')
+for key, value in validation_accuracy_by_epochs.items():
+    print('%s -- %.4f' % (key, value))
+
+print('----------------')
+print('best accuracy')
+for key, value in best_accuracy.items():
+    print('%.5f -- %.4f' % (key, value))
+
+print('----------------')
+print('best validation accuracy')
+for key, value in best_validation_accuracy.items():
+    print('%.5f -- %.4f' % (key, value))
+
+fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(15, 9))
+axes[0][0].plot(list(accuracy_by_epochs.keys()), list(accuracy_by_epochs.values()))
+axes[0][1].plot(list(best_accuracy.keys()), list(best_accuracy.values()))
+axes[1][0].plot(list(validation_accuracy_by_epochs.keys()), list(validation_accuracy_by_epochs.values()))
+axes[1][1].plot(list(best_validation_accuracy.keys()), list(best_validation_accuracy.values()))
+fig.tight_layout()
+plt.savefig('plot')
+plt.show()
+# plt.plot(list(accuracy_by_epochs.keys()), list(accuracy_by_epochs.values()))
+#
+# plt.plot(list(best_accuracy.keys()), list(best_accuracy.values()))
+# plt.show()
 # while nodes > 2:
 #     nodes /= 2
 #     model.add(Dense(nodes, activation='relu'))
