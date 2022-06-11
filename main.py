@@ -9,12 +9,19 @@ from keras import Sequential, optimizers
 from keras.layers import Dense, Dropout, Activation
 from keras.utils import plot_model
 import matplotlib.pyplot as plt
+from sklearn import svm, metrics
+from sklearn.metrics import accuracy_score, confusion_matrix, plot_confusion_matrix
+from sklearn.model_selection import GridSearchCV
 
+from csv_data_utils import extract_csv_data_from_all_training_true_videos, \
+    extract_csv_data_from_all_training_fake_videos, compress_all_csv_data_and_save_csv_with_frames, \
+    merge_all_csv_files_into_training_and_validation_files
 from video_utils import get_total_video_duration_in_directory, get_video_duration, \
     parse_duration_from_seconds_to_minutes
 
 config = configparser.ConfigParser()
 config.read('config.ini')
+
 
 training_dataset_path = os.path.join(config['Training path']['training directory'], 'training_dataset_file.csv')
 validation_dataset_path = os.path.join(config['Validation path']['validation directory'],
@@ -42,22 +49,35 @@ validation_dataset_answers_shuffled = validation_dataset_shuffled.iloc[:, [21]]
 
 training_stats = training_dataset_shuffled.describe()
 training_stats = training_stats.transpose()
+
+
 # print(training_stats)
 
+def fill_dictionary_using_border_values_and_step(left_border, right_border, step):
+    dictionary = {}
+    while left_border < right_border:
+        dictionary.update({round(left_border, 5): 0})
+        left_border += step
 
-MAX_EPOCHS = 230
-batch_size = 13
+    return dictionary
+
+
+MAX_EPOCHS = 270
+MIN_EPOCHS = 100
+EPOCHS_STEP = 20
+
+batch_size = 10
 run = 0
-runs = 6
-learning_rate_border = 0.004
+runs = 4
 
-best_accuracy = {0.0015: 0, 0.00175: 0,
-                 0.002: 0, 0.00225: 0, 0.0025: 0, 0.00275: 0,
-                 0.003: 0, 0.00325: 0, 0.0035: 0, 0.00375: 0}
+MAX_LEARNING_RATE = 0.02
+MIN_LEARNING_RATE = 0.001
+LEARNING_RATE_STEP = 0.0015
 
-best_validation_accuracy = {0.0015: 0, 0.00175: 0,
-                            0.002: 0, 0.00225: 0, 0.0025: 0, 0.00275: 0,
-                            0.003: 0, 0.00325: 0, 0.0035: 0, 0.00375: 0}
+best_accuracy = fill_dictionary_using_border_values_and_step(MIN_LEARNING_RATE, MAX_LEARNING_RATE, LEARNING_RATE_STEP)
+
+best_validation_accuracy = fill_dictionary_using_border_values_and_step(MIN_LEARNING_RATE, MAX_LEARNING_RATE,
+                                                                        LEARNING_RATE_STEP)
 
 
 def create_model(learning_rate):
@@ -77,9 +97,10 @@ def create_model(learning_rate):
     model.compile(loss=keras.losses.binary_crossentropy,
                   optimizer=optimizer,
                   metrics=['accuracy'])
+    return model
 
 
-def test_model():
+def test_model(epoch):
     global history
     with tensorflow.device('/CPU:0'):
         history = model.fit(
@@ -94,11 +115,9 @@ def test_model():
         )
 
 
-accuracy_by_epochs = {140: 0, 150: 0, 160: 0,
-                      170: 0, 180: 0, 190: 0, 200: 0, 210: 0, 220: 0}
+accuracy_by_epochs = fill_dictionary_using_border_values_and_step(MIN_EPOCHS, MAX_EPOCHS, EPOCHS_STEP)
 
-validation_accuracy_by_epochs = {140: 0, 150: 0, 160: 0,
-                                 170: 0, 180: 0, 190: 0, 200: 0, 210: 0, 220: 0}
+validation_accuracy_by_epochs = fill_dictionary_using_border_values_and_step(MIN_EPOCHS, MAX_EPOCHS, EPOCHS_STEP)
 
 while run < runs:
     epoch = list(accuracy_by_epochs.keys())[0]
@@ -108,14 +127,14 @@ while run < runs:
         validation_accuracy = {}
         learning_rate = list(best_accuracy.keys())[0]
 
-        while learning_rate < learning_rate_border:
+        while learning_rate < MAX_LEARNING_RATE:
             print('===================================')
             print('%s - %s - %.5f' % (run, epoch, learning_rate))
             print('===================================')
 
             create_model(learning_rate)
             # model.summary()
-            test_model()
+            test_model(epoch)
 
             accuracy.update({round(learning_rate, 5): history.history['accuracy'][epoch - 1]})
             validation_accuracy.update({round(learning_rate, 5): history.history['val_accuracy'][epoch - 1]})
@@ -134,7 +153,7 @@ while run < runs:
 
             validation_accuracy_by_epochs.update({epoch: max_validation_accuracy})
 
-            learning_rate += 0.00025
+            learning_rate += LEARNING_RATE_STEP
 
         print('----------------')
         print('current accuracy')
@@ -160,7 +179,7 @@ while run < runs:
             print('%.5f -- %.4f' % (key, value))
         print('----------------')
 
-        epoch += 10
+        epoch += EPOCHS_STEP
 
     run += 1
 
@@ -192,37 +211,72 @@ axes[1][1].plot(list(best_validation_accuracy.keys()), list(best_validation_accu
 fig.tight_layout()
 plt.savefig('plot')
 plt.show()
+
+
+def tune_and_create_mlp(learning_rate=0.00004, epoch=280):
+    model = create_model(learning_rate=learning_rate)
+    model.summary()
+    test_model(epoch=epoch)
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['Train', 'Cross-Validation'], loc='upper left')
+    plt.show()
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('epoch')
+    plt.legend(['Train', 'Cross-Validation'], loc='upper left')
+    plt.show()
+
+    return model
+
+
+# tune_and_create_mlp()
+
+
+def tune_and_train_svm():
+    ml = svm.SVC()
+    param_grid = {'C': [1, 10, 100, 1000, 10000],
+                  'gamma': [1, 0.1, 0.01, 0.001, 0.0001],
+                  'kernel': ['rbf']}
+    grid = GridSearchCV(ml, param_grid, refit=True, verbose=1, cv=15)
+    grid_search = grid.fit(training_dataset_data_shuffled, training_dataset_answers_shuffled)
+    print(grid_search.best_params_)
+    accuracy = grid_search.best_score_ * 100
+    print("Accuracy for our training dataset with tuning is : {:.2f}%".format(accuracy))
+    y_test_hat = grid.predict(validation_dataset_data_shuffled)
+    test_accuracy = accuracy_score(validation_dataset_answers_shuffled, y_test_hat) * 100
+    print("Accuracy for our testing dataset with tuning is : {:.2f}%".format(test_accuracy))
+    confusion_matrix(validation_dataset_answers_shuffled, y_test_hat)
+    disp = plot_confusion_matrix(grid, validation_dataset_data_shuffled, validation_dataset_answers_shuffled,
+                                 cmap=plt.cm.Blues)
+    plt.show()
+
+
+# tune_and_train_svm()
+
+
 # plt.plot(list(accuracy_by_epochs.keys()), list(accuracy_by_epochs.values()))
 #
 # plt.plot(list(best_accuracy.keys()), list(best_accuracy.values()))
 # plt.show()
-# while nodes > 2:
-#     nodes /= 2
-#     model.add(Dense(nodes, activation='relu'))
-#     model.add(Dense(nodes, activation='relu'))
-#     model.add(Dropout(0.2))
-#     print(nodes)
-#
-# # model.add(Dense(16, activation='relu'))
-# # model.add(Dense(8, activation='relu'))
-# # model.add(Dropout(0.2))
-# # model.add(Dense(4, activation='relu'))
-# # model.add(Dropout(0.2))
-# # model.add(Dense(4, activation='relu'))
-# # model.add(Dropout(0.2))
-# nodes /= 2
-# model.add(Dense(nodes, activation='sigmoid'))
-# print(nodes)
+
+
 # # plot_model(model, show_shapes=True, show_layer_names=True)
-# model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-# model.fit(training_dataset_data_shuffled, training_dataset_answers_shuffled, epochs=100, batch_size=10, verbose=0)
-# loss, accuracy = model.evaluate(validation_dataset_data_shuffled, validation_dataset_answers_shuffled, verbose=0)
-# print('Model Loss: %.2f, Accuracy: %.2f' % ((loss * 100), (accuracy * 100)))
-#
-# predictions = model.predict(validation_dataset_data_shuffled)
-# m = 0
-# for i in range(len(validation_dataset_data_shuffled)):
-#     if predictions[i] == 1:
-#         m += 1
-#     print('Predicted %d---> Expected %d' % (predictions[i], validation_dataset_answers_shuffled ['truthfulness'].iloc[i]))
-# print(m)
+
+def check_model_prediction():
+    predictions = model.predict(validation_dataset_data_shuffled)
+    m = 0
+    for i in range(len(validation_dataset_data_shuffled)):
+        if predictions[i] == 1:
+            m += 1
+        print('Predicted %d---> Expected %d' % (
+        predictions[i], validation_dataset_answers_shuffled['truthfulness'].iloc[i]))
+    print(m)
+
+
+# check_model_prediction()

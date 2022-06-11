@@ -7,8 +7,6 @@ import pandas as pd
 from feat import Detector
 from feat.utils import read_feat
 
-from main import config
-
 face_model = "retinaface"
 landmark_model = "pfld"
 emotion_model = "fer"
